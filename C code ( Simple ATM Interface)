@@ -1,31 +1,47 @@
-#include<stdio.h>
-#include<stdlib.h>
-#include<string.h>
-#include<time.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 /*
-  node structure for implementing a queue to store transaction history
+  node structure for transaction history
 */
 typedef struct node {
-    char statement[50];
+    char type[10];     // Deposit / Withdraw
+    int amount;
+    char date[12];     // dd-mm-yyyy
+    char time[10];     // hh:mm:ss
     struct node* link;
 } node;
 
 /*
-  ATM function prototypes
+  Global variables (in-memory only)
+*/
+int pin = 0;        // User PIN
+int balance = 0;    // Account balance
+
+/*
+  Simulated Clock (start point)
+*/
+int simHour = 12, simMin = 0, simSec = 0;
+int simDay = 6, simMonth = 9, simYear = 2025;
+
+/*
+  Function prototypes
 */
 void pinGeneration(void);
 int checkPin(void);
-void showBalance(int *);
-void depositMoney(node **, int *);
-void withdrawMoney(node **, int *);
-void saveHistory(node **, char *);
+void showBalance(void);
+void depositMoney(node **);
+void withdrawMoney(node **);
+void saveHistory(node **, char *, int);
 void removeHistory(node **);
 void showHistory(node **);
+void getDateTime(char *date, char *timeStr);
+void exportData(node **);
 
 int main(void) {
     int choice1, choice2;
-    int pinValid = 0, balance = 0;
+    int pinValid = 0;
 
     node *head = NULL;
 
@@ -36,175 +52,112 @@ int main(void) {
         scanf("%d", &choice1);
 
         switch (choice1) {
-            case 1: pinGeneration();
-                    exit(EXIT_SUCCESS);
+            case 1: 
+                pinGeneration();
+                break;
 
-            case 2: pinValid = checkPin();
+            case 2: 
+                pinValid = checkPin();
+                if (pinValid) {
+                    printf("\nValid PIN\n");
+                } else {
+                    printf("\nInvalid PIN. Please generate a PIN if you don't have one.\n");
+                    break; // back to main menu
+                }
 
-                    if (pinValid) {
-                        printf("\nValid PIN\n");
-                    } else {
-                        printf("\nInvalid PIN. Please generate a PIN if you don't have one.\n");
-                        exit(EXIT_FAILURE);
+                while(pinValid) {
+                    printf("\nATM System Menu\n===============\n\n");
+                    printf("1. Check Balance\n2. Deposit\n3. Withdraw\n4. View transaction history\n5. Quit ATM\n\n");
+
+                    printf("Enter choice: ");
+                    scanf("%d", &choice2);
+
+                    switch(choice2) {
+                        case 1: showBalance();
+                                break;
+                        case 2: depositMoney(&head);
+                                break;
+                        case 3: withdrawMoney(&head);
+                                break;
+                        case 4: showHistory(&head);
+                                break;
+                        case 5: printf("\nThank you for using the ATM\n");
+                                pinValid = 0; // exit ATM menu
+                                break;
+                        default: printf("\nInvalid option entered!\n");
+                                 break;
                     }
+                }
+                break;
 
-                    /*
-					  On valid PIN entry by user, the ATM Menu is presented to the user
-					*/
-                    while(pinValid) {
-                        printf("\nATM System Menu\n===============\n\n");
-                        printf("1. Check Balance\n2. Deposit\n3. Withdraw\n4. View transaction history\n5. Quit\n\n");
+            case 3: 
+                printf("\nExiting... Goodbye!\n");
+                exportData(&head);  // export before exit
+                exit(EXIT_SUCCESS);
 
-                        printf("Enter choice: ");
-                        scanf("%d", &choice2);
-
-                        switch(choice2) {
-                            case 1: showBalance(&balance);
-                                    break;
-                            case 2: depositMoney(&head, &balance);
-                                    break;
-                            case 3: withdrawMoney(&head, &balance);
-                                    break;
-                            case 4: showHistory(&head);
-                                    break;
-                            case 5: printf("\nThank you for using the ATM\n");
-                                    exit(EXIT_SUCCESS);
-                            default: printf("\nInvalid option entered!\n");
-                                     break;
-                        }
-                    }
-
-            case 3: exit(EXIT_SUCCESS);
-
-            default: printf("\nInvalid choice...Try again...\n");
-                     break;
+            default: 
+                printf("\nInvalid choice...Try again...\n");
+                break;
         }
     }
     return 0;
 }
 
 /*
-  This function will search for the PIN entered by the user
-  in the file where the PIN numbers are stored
-  If PIN is found return 1
-  Otherwise, return 0
+  PIN checking
 */
 int checkPin(void) {
-    FILE *fp;
-    // buffer to read PIN and store from file
-    char pin[8];
-    // buffer to read PIN and store from user
-    char keyPin[8];
-    int pinValid = 0;
-
+    int keyPin;
     printf("\n\nEnter the PIN: \n");
-    scanf("%s", keyPin);
+    scanf("%d", &keyPin);
 
-    fp = fopen("pin.txt", "r");
-    if (NULL == fp) {
-        printf("\nFile cannot be opened\n");
-        exit(EXIT_FAILURE);
-    }
-
-    /*
-      Search for the PIN entered by user in file pin.txt
-    */
-    while (fgets(pin, sizeof(pin), fp) != NULL) {
-        if (strstr(pin, keyPin)) {
-            pinValid = 1;
-        }
-    }
-    fclose(fp);
-
-    return pinValid;
+    return (keyPin == pin);
 }
 
 /*
-  This function will generate a 4-digit random number that
-  is considered as PIN
+  Generate a 4-digit PIN (in memory only)
 */
 void pinGeneration(void) {
-    FILE *fp;
-
-    /*
-	  Generate a random 4 digit number
-	*/
-    srand(time(NULL));
-    int generatedPin = 1000+rand()%9000;
+    srand(1234); // fixed seed for repeatable results in online compilers
+    pin = 1000 + rand() % 9000;
 
     printf("\nPIN generated successfully\n");
-    printf("\nYour generated PIN: %d\n", generatedPin);
-    printf("\nRe-run the program and use ATM with this PIN\n\n");
-
-    fp = fopen("pin.txt", "a");
-    if (NULL == fp) {
-        printf("\nCannot open file!");
-        exit(EXIT_FAILURE);
-    }
-
-    /*
-      Write PIN to the file
-    */
-    fprintf(fp, "%d\n", generatedPin);
-    fclose(fp);
+    printf("\nYour generated PIN: %d\n", pin);
+    printf("\nUse this PIN for ATM login\n\n");
 }
 
-/*
-  This function will display the current balance amount
-*/
-void showBalance(int *balance) {
-    printf("\nYour current balance is Rs.%d\n", *balance);
+void showBalance(void) {
+    printf("\nYour current balance is Rs.%d\n", balance);
 }
 
-/*
-  This function will add the money deposited to the balance
-*/
-void depositMoney(node **head, int *balance) {
+void depositMoney(node **head) {
     int depositAmount;
-    /*
-      buffer to store
-    */
-    char depositStmt[50];
 
     printf("\nEnter amount to deposit: ");
     scanf("%d", &depositAmount);
 
     if (depositAmount > 0) {
-        *balance += depositAmount;
+        balance += depositAmount;
         printf("\nRs.%d deposited\n", depositAmount);
-
-		/*
-		  saving formatted string in depositStmt character array
-		*/
-        snprintf(depositStmt, sizeof(depositStmt), "Rs.%d deposited\n", depositAmount);
-        saveHistory(head, depositStmt);
+        saveHistory(head, "Deposit", depositAmount);
     } else {
         printf("\nInvalid amount entered\n.");
     }
 }
 
-/*
-  This function will deduct the money withdrawn from the balance
-*/
-void withdrawMoney(node **head, int *balance) {
+void withdrawMoney(node **head) {
     int withdrawAmount;
-    char withdrawStmt[50];
 
     printf("\nEnter amount to withdraw: ");
     scanf("%d", &withdrawAmount);
 
     if (withdrawAmount > 0) {
-        if (withdrawAmount > *balance) {
-            printf("\nCannot withdraw. Balance Rs.%d\n", *balance);
+        if (withdrawAmount > balance) {
+            printf("\nCannot withdraw. Balance Rs.%d\n", balance);
         } else {
-            *balance -= withdrawAmount;
+            balance -= withdrawAmount;
             printf("\nRs.%d withdrawn\n", withdrawAmount);
-
-            /*
-			  saving formatted string in withdrawStmt character array
-			*/
-            snprintf(withdrawStmt, sizeof(withdrawStmt), "Rs.%d withdrawn\n", withdrawAmount);
-            saveHistory(head, withdrawStmt);
+            saveHistory(head, "Withdraw", withdrawAmount);
         }
     } else {
         printf("\nInvalid amount entered\n.");
@@ -212,27 +165,27 @@ void withdrawMoney(node **head, int *balance) {
 }
 
 /*
-  This function will save a transaction statement
+  Save a transaction to history (queue of max 10)
 */
-void saveHistory(node **head, char *str) {
+void saveHistory(node **head, char *type, int amount) {
     static int count = 0;
-    node *temp;
-    temp = (node *)malloc(sizeof(node));
+    node *temp = (node *)malloc(sizeof(node));
 
-    strcpy(temp->statement, str);
+    strcpy(temp->type, type);
+    temp->amount = amount;
+    getDateTime(temp->date, temp->time);
     temp->link = NULL;
 
-    if (NULL == *head) {
+    if (*head == NULL) {
         *head = temp;
         count++;
     } else {
-        if (10 == count) {
+        if (count == 10) {
             removeHistory(head);
             count--;
         }
-        node *p;
-        p = *head;
-        while (NULL != p->link) {
+        node *p = *head;
+        while (p->link != NULL) {
             p = p->link;
         }
         p->link = temp;
@@ -241,31 +194,95 @@ void saveHistory(node **head, char *str) {
 }
 
 /*
-  This function is used to remove the oldest transaction when
-  10 transactions are made
+  Remove oldest transaction (for 10-limit queue)
 */
 void removeHistory(node **head) {
-    node *temp;
-    temp = *head;
+    node *temp = *head;
     *head = (*head)->link;
-    temp->link = NULL;
     free(temp);
 }
 
 /*
-  This function will display the transaction history
+  Show transaction history in table format
 */
 void showHistory(node **head) {
-    node *temp;
-    temp = *head;
+    node *temp = *head;
+    int i = 1;
 
-    if (NULL == temp) {
+    if (temp == NULL) {
         printf("\nNo transaction history...\n");
     } else {
-        printf("\nTransaction History\n-------------------\n\n");
-        while (NULL != temp) {
-            printf("%s\n", temp->statement);
+        printf("\nTransaction History\n");
+        printf("-------------------------------------------------------------\n");
+        printf("No   | Type      | Amount   | Date       | Time\n");
+        printf("-------------------------------------------------------------\n");
+
+        while (temp != NULL) {
+            printf("%-4d | %-9s | %-8d | %-10s | %-8s\n", 
+                   i, temp->type, temp->amount, temp->date, temp->time);
             temp = temp->link;
+            i++;
         }
+        printf("-------------------------------------------------------------\n");
     }
+}
+
+/*
+  Utility: Simulated Date & Time
+  - Starts at 06-09-2025 12:00:00
+  - Adds +5 seconds per transaction
+*/
+void getDateTime(char *date, char *timeStr) {
+    // Format date
+    sprintf(date, "%02d-%02d-%04d", simDay, simMonth, simYear);
+
+    // Format time
+    sprintf(timeStr, "%02d:%02d:%02d", simHour, simMin, simSec);
+
+    // Advance clock by 5 seconds for next transaction
+    simSec += 5;
+    if (simSec >= 60) {
+        simSec -= 60;
+        simMin++;
+    }
+    if (simMin >= 60) {
+        simMin -= 60;
+        simHour++;
+    }
+    if (simHour >= 24) {
+        simHour = 0;
+        simDay++;
+        // very basic rollover (ignores month lengths, just keeps increasing day)
+    }
+}
+
+/*
+  Export data (copy-friendly format at end of program)
+*/
+void exportData(node **head) {
+    node *temp = *head;
+    int i = 1;
+
+    printf("\n================ ATM EXPORT DATA ================\n");
+    printf("PIN: %d\n", pin);
+    printf("Final Balance: Rs.%d\n\n", balance);
+
+    if (temp == NULL) {
+        printf("No transactions recorded.\n");
+    } else {
+        printf("Transaction History (up to 10)\n");
+        printf("-------------------------------------------------------------\n");
+        printf("No   | Type      | Amount   | Date       | Time\n");
+        printf("-------------------------------------------------------------\n");
+
+        while (temp != NULL) {
+            printf("%-4d | %-9s | %-8d | %-10s | %-8s\n", 
+                   i, temp->type, temp->amount, temp->date, temp->time);
+            temp = temp->link;
+            i++;
+        }
+        printf("-------------------------------------------------------------\n");
+    }
+    printf("=================================================\n");
+    printf("\nCopy this output to save your data.\n");
 }
